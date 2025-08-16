@@ -1,6 +1,5 @@
-// src/App.tsx
 import React, { useState, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { FileText, Upload, Download, RefreshCw, CheckCircle, XCircle, AlertCircle, Zap, Code, Sparkles } from 'lucide-react'
 
 type SchemaField = {
   id: string
@@ -33,8 +32,7 @@ function App() {
   const [loading, setLoading] = useState<boolean>(false)
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking')
   const [troubleshooting, setTroubleshooting] = useState<string[]>([])
-
-  const { register, handleSubmit, reset } = useForm<Record<string, string>>()
+  const [formValues, setFormValues] = useState<Record<string, string>>({})
 
   // Check backend connectivity on mount
   useEffect(() => {
@@ -79,7 +77,6 @@ function App() {
     }
   }
 
-  // 1) Send raw LaTeX to /upload-tex
   const onUpload = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -102,10 +99,10 @@ function App() {
       const data = (await resp.json()) as UploadResponse
       setSchema(data.schema)
       
-      // initialize the form with defaults:
+      // Initialize form values with defaults
       const defaults: Record<string,string> = {}
       data.schema.forEach(f => { defaults[f.id] = f.default })
-      reset(defaults)
+      setFormValues(defaults)
       setStep('fill')
     } catch (err: any) {
       console.error('Upload error:', err)
@@ -115,14 +112,14 @@ function App() {
     }
   }
 
-  // 2) Send filled values + template to /generate-pdf and trigger download
-  const onGenerate = async (values: Record<string, string>) => {
+  const onGenerate = async (e: React.FormEvent) => {
+    e.preventDefault()
     setError(null)
     setTroubleshooting([])
     setLoading(true)
     
     try {
-      const payload: GeneratePayload = { template, values }
+      const payload: GeneratePayload = { template, values: formValues }
       const resp = await fetch('http://localhost:3001/generate-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -157,214 +154,305 @@ function App() {
     setSchema([])
     setError(null)
     setTroubleshooting([])
-    reset()
+    setFormValues({})
   }
 
-  const StatusIndicator = () => (
-    <div style={{ 
-      display: 'flex', 
-      alignItems: 'center', 
-      gap: '8px',
-      marginBottom: '1rem',
-      padding: '8px 12px',
-      backgroundColor: backendStatus === 'online' ? '#d4edda' : '#f8d7da',
-      border: `1px solid ${backendStatus === 'online' ? '#c3e6cb' : '#f5c6cb'}`,
-      borderRadius: '4px',
-      fontSize: '14px'
-    }}>
-      <span style={{ 
-        width: '8px', 
-        height: '8px', 
-        borderRadius: '50%', 
-        backgroundColor: backendStatus === 'online' ? '#28a745' : '#dc3545'
-      }} />
-      <span>
-        Backend: {backendStatus === 'checking' ? 'Checking...' : backendStatus}
-      </span>
-      {backendStatus === 'online' && (
-        <button 
-          onClick={testGeminiConnection}
-          disabled={loading}
-          style={{ 
-            marginLeft: 'auto',
-            padding: '4px 8px',
-            backgroundColor: '#007bff',
-            color: 'white',
-            border: 'none',
-            borderRadius: '3px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontSize: '12px'
-          }}
-        >
-          {loading ? 'Testing...' : 'Test Gemini'}
-        </button>
-      )}
-    </div>
-  )
+  const handleInputChange = (fieldId: string, value: string) => {
+    setFormValues(prev => ({
+      ...prev,
+      [fieldId]: value
+    }))
+  }
+
+  const StatusIndicator = () => {
+    const statusConfig = {
+      checking: { color: 'bg-amber-500', text: 'Checking connection...', icon: RefreshCw },
+      online: { color: 'bg-emerald-500', text: 'Backend Online', icon: CheckCircle },
+      offline: { color: 'bg-red-500', text: 'Backend Offline', icon: XCircle }
+    }
+    
+    const config = statusConfig[backendStatus]
+    const IconComponent = config.icon
+    
+    return (
+      <div className={`flex items-center justify-between p-4 rounded-xl border transition-all duration-300 ${
+        backendStatus === 'online' 
+          ? 'bg-emerald-50 border-emerald-200 shadow-sm' 
+          : backendStatus === 'offline'
+          ? 'bg-red-50 border-red-200 shadow-sm'
+          : 'bg-amber-50 border-amber-200 shadow-sm'
+      }`}>
+        <div className="flex items-center gap-3">
+          <div className={`w-3 h-3 rounded-full ${config.color} animate-pulse`} />
+          <IconComponent className={`w-4 h-4 ${
+            backendStatus === 'online' ? 'text-emerald-600' : 
+            backendStatus === 'offline' ? 'text-red-600' : 'text-amber-600'
+          }`} />
+          <span className={`font-medium text-sm ${
+            backendStatus === 'online' ? 'text-emerald-700' : 
+            backendStatus === 'offline' ? 'text-red-700' : 'text-amber-700'
+          }`}>
+            {config.text}
+          </span>
+        </div>
+        
+        {backendStatus === 'online' && (
+          <button 
+            onClick={testGeminiConnection}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-medium rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg"
+          >
+            <Zap className="w-4 h-4" />
+            {loading ? 'Testing...' : 'Test Gemini AI'}
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const StepIndicator = () => {
+    const steps = [
+      { id: 'upload', label: 'Upload Template', icon: Upload },
+      { id: 'fill', label: 'Fill Details', icon: FileText },
+      { id: 'done', label: 'Download PDF', icon: Download }
+    ]
+    
+    return (
+      <div className="flex items-center justify-center mb-8">
+        {steps.map((stepItem, index) => {
+          const isActive = stepItem.id === step
+          const isCompleted = steps.findIndex(s => s.id === step) > index
+          const IconComponent = stepItem.icon
+          
+          return (
+            <React.Fragment key={stepItem.id}>
+              <div className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-300 ${
+                isActive ? 'bg-blue-100 text-blue-700' : 
+                isCompleted ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
+              }`}>
+                <IconComponent className="w-4 h-4" />
+                <span className="font-medium text-sm">{stepItem.label}</span>
+              </div>
+              {index < steps.length - 1 && (
+                <div className={`w-8 h-0.5 mx-2 transition-all duration-300 ${
+                  isCompleted ? 'bg-emerald-300' : 'bg-gray-200'
+                }`} />
+              )}
+            </React.Fragment>
+          )
+        })}
+      </div>
+    )
+  }
 
   return (
-    <div style={{ maxWidth: 600, margin: '2rem auto', fontFamily: 'sans-serif' }}>
-      <h1>LaTeX Resume Builder MVP</h1>
-      <p style={{ color: '#666', marginBottom: '1rem' }}>
-        Powered by Gemini AI - Upload your LaTeX template and generate a personalized resume
-      </p>
-      
-      <StatusIndicator />
-      
-      {step === 'upload' && (
-        <div>
-          <label>
-            Paste your LaTeX template:
-            <textarea
-              value={template}
-              onChange={e => setTemplate(e.target.value)}
-              rows={12}
-              style={{ 
-                width: '100%', 
-                fontFamily: 'monospace',
-                padding: '8px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                marginTop: '8px'
-              }}
-              placeholder="Paste your .tex file content here..."
-              disabled={loading || backendStatus !== 'online'}
-            />
-          </label>
-          <button 
-            onClick={onUpload}
-            style={{ 
-              marginTop: 16,
-              padding: '10px 20px',
-              backgroundColor: loading || backendStatus !== 'online' ? '#ccc' : '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: loading || backendStatus !== 'online' ? 'not-allowed' : 'pointer'
-            }}
-            disabled={loading || !template.trim() || backendStatus !== 'online'}
-          >
-            {loading ? 'Parsing Template...' : 'Parse Template'}
-          </button>
-        </div>
-      )}
-
-      {step === 'fill' && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2>Fill in your details</h2>
-            <button 
-              onClick={resetApp}
-              style={{ 
-                padding: '5px 10px',
-                backgroundColor: '#6c757d',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '12px'
-              }}
-            >
-              Start Over
-            </button>
-          </div>
-          
-          {schema.map(field => (
-            <div key={field.id} style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '4px' }}>
-                {field.label}
-              </label>
-              <input
-                {...register(field.id)}
-                defaultValue={field.default}
-                style={{ 
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px'
-                }}
-                disabled={loading}
-              />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="max-w-4xl mx-auto px-6 py-12">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <div className="p-3 bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl shadow-lg">
+              <Code className="w-8 h-8 text-white" />
             </div>
-          ))}
-          
-          <button 
-            onClick={handleSubmit(onGenerate)}
-            style={{ 
-              padding: '10px 20px',
-              backgroundColor: loading ? '#ccc' : '#28a745',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: loading ? 'not-allowed' : 'pointer'
-            }}
-            disabled={loading}
-          >
-            {loading ? 'Generating PDF...' : 'Generate PDF'}
-          </button>
-        </div>
-      )}
-
-      {step === 'done' && (
-        <div style={{ textAlign: 'center', padding: '2rem' }}>
-          <p style={{ fontSize: '18px', color: '#28a745' }}>Your PDF is downloading! 🎉</p>
-          <p style={{ color: '#666', marginBottom: '1rem' }}>
-            Check your downloads folder for the generated resume.
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-purple-800 bg-clip-text text-transparent">
+              LaTeX Resume Builder
+            </h1>
+          </div>
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
+            Transform your LaTeX templates into professional resumes with the power of 
+            <span className="font-semibold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent mx-1">
+              Gemini AI
+            </span>
+            - intelligent parsing, seamless generation.
           </p>
-          <button 
-            onClick={resetApp}
-            style={{ 
-              padding: '10px 20px',
-              backgroundColor: '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
-          >
-            Create Another Resume
-          </button>
         </div>
-      )}
 
-      {error && (
-        <div style={{ 
-          padding: '12px',
-          backgroundColor: '#f8d7da',
-          color: '#721c24',
-          border: '1px solid #f5c6cb',
-          borderRadius: '4px',
-          marginTop: '1rem'
-        }}>
-          <strong>Error:</strong> {error}
-          
-          {troubleshooting.length > 0 && (
-            <div style={{ marginTop: '8px' }}>
-              <strong>Troubleshooting:</strong>
-              <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
-                {troubleshooting.map((tip, index) => (
-                  <li key={index}>{tip}</li>
+        {/* Step Indicator */}
+        <StepIndicator />
+
+        {/* Status Card */}
+        <div className="mb-8">
+          <StatusIndicator />
+        </div>
+
+        {/* Main Content Card */}
+        <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8">
+          {step === 'upload' && (
+            <div className="space-y-6">
+              <div className="text-center mb-8">
+                <Sparkles className="w-12 h-12 text-purple-600 mx-auto mb-4" />
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Upload Your LaTeX Template</h2>
+                <p className="text-gray-600">Paste your .tex file content below and let AI parse the structure</p>
+              </div>
+              
+              <div className="space-y-4">
+                <label className="block">
+                  <span className="text-sm font-semibold text-gray-700 mb-2 block">LaTeX Template Code</span>
+                  <div className="relative">
+                    <textarea
+                      value={template}
+                      onChange={e => setTemplate(e.target.value)}
+                      rows={12}
+                      className="w-full p-4 border border-gray-200 rounded-xl font-mono text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 resize-none bg-gray-50 hover:bg-white"
+                      placeholder="Paste your LaTeX template here...
+
+Example:
+\documentclass{article}
+\begin{document}
+\title{{{TITLE}}}
+\author{{{AUTHOR_NAME}}}
+\maketitle
+..."
+                      disabled={loading || backendStatus !== 'online'}
+                    />
+                    <div className="absolute top-3 right-3">
+                      <div className="px-2 py-1 bg-gray-800 text-gray-300 rounded text-xs font-mono">
+                        .tex
+                      </div>
+                    </div>
+                  </div>
+                </label>
+                
+                <button 
+                  onClick={onUpload}
+                  disabled={loading || !template.trim() || backendStatus !== 'online'}
+                  className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-xl hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                >
+                  {loading ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      Parsing Template...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5" />
+                      Parse Template with AI
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 'fill' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Fill Your Details</h2>
+                  <p className="text-gray-600">Complete the form fields extracted from your template</p>
+                </div>
+                <button 
+                  onClick={resetApp}
+                  className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Start Over
+                </button>
+              </div>
+              
+              <div className="grid gap-6">
+                {schema.map((field, index) => (
+                  <div key={field.id} className="space-y-2">
+                    <label className="block text-sm font-semibold text-gray-700">
+                      {field.label}
+                    </label>
+                    <input
+                      value={formValues[field.id] || ''}
+                      onChange={(e) => handleInputChange(field.id, e.target.value)}
+                      className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+                      disabled={loading}
+                      placeholder={`Enter ${field.label.toLowerCase()}...`}
+                    />
+                  </div>
                 ))}
-              </ul>
+              </div>
+              
+              <button 
+                onClick={onGenerate}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold rounded-xl hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    Generating PDF...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-5 h-5" />
+                    Generate Professional PDF
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {step === 'done' && (
+            <div className="text-center space-y-6 py-8">
+              <div className="w-20 h-20 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle className="w-10 h-10 text-white" />
+              </div>
+              
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900 mb-4">Success! 🎉</h2>
+                <p className="text-xl text-gray-600 mb-2">Your professional resume is ready!</p>
+                <p className="text-gray-500">Check your downloads folder for the generated PDF.</p>
+              </div>
+              
+              <button 
+                onClick={resetApp}
+                className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-xl hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+              >
+                <FileText className="w-5 h-5" />
+                Create Another Resume
+              </button>
             </div>
           )}
         </div>
-      )}
 
-      {backendStatus === 'offline' && (
-        <div style={{ 
-          padding: '12px',
-          backgroundColor: '#f8d7da',
-          color: '#721c24',
-          border: '1px solid #f5c6cb',
-          borderRadius: '4px',
-          marginTop: '1rem'
-        }}>
-          <strong>Backend Offline:</strong> Make sure your backend server is running on port 3001
-          <br />
-          <small>Run: <code>cd backend && node server.js</code></small>
-        </div>
-      )}
+        {/* Error Display */}
+        {error && (
+          <div className="mt-6 p-6 bg-red-50 border border-red-200 rounded-xl">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-red-800 mb-2">Something went wrong</h3>
+                <p className="text-red-700 mb-4">{error}</p>
+                
+                {troubleshooting.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-red-800 mb-2">Troubleshooting Tips:</h4>
+                    <ul className="space-y-1">
+                      {troubleshooting.map((tip, index) => (
+                        <li key={index} className="text-red-700 text-sm flex items-start gap-2">
+                          <span className="w-1.5 h-1.5 bg-red-400 rounded-full flex-shrink-0 mt-2" />
+                          {tip}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Backend Offline Notice */}
+        {backendStatus === 'offline' && (
+          <div className="mt-6 p-6 bg-red-50 border border-red-200 rounded-xl">
+            <div className="flex items-start gap-3">
+              <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-red-800 mb-2">Backend Server Offline</h3>
+                <p className="text-red-700 mb-2">Make sure your backend server is running on port 3001</p>
+                <code className="text-sm bg-red-100 px-2 py-1 rounded font-mono text-red-800">
+                  cd backend && node server.js
+                </code>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
