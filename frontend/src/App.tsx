@@ -41,7 +41,7 @@ function App() {
 
   const checkBackendHealth = async () => {
     try {
-      const response = await fetch('http://localhost:3001/health', {
+  const response = await fetch('https://resume-made-easy.onrender.com/health', {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       })
@@ -61,7 +61,7 @@ function App() {
     setError(null)
     
     try {
-      const response = await fetch('http://localhost:3001/test-gemini')
+  const response = await fetch('https://resume-made-easy.onrender.com/test-gemini')
       const data = await response.json()
       
       if (data.success) {
@@ -84,7 +84,7 @@ function App() {
     setLoading(true)
     
     try {
-      const resp = await fetch('http://localhost:3001/upload-tex', {
+  const resp = await fetch('https://resume-made-easy.onrender.com/upload-tex', {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: template,
@@ -120,7 +120,7 @@ function App() {
     
     try {
       const payload: GeneratePayload = { template, values: formValues }
-      const resp = await fetch('http://localhost:3001/generate-pdf', {
+  const resp = await fetch('https://resume-made-easy.onrender.com/generate-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
