@@ -351,7 +351,7 @@ Example:
               </div>
               
               <div className="grid gap-6">
-                {schema.map((field, index) => (
+                {schema.map((field) => (
                   <div key={field.id} className="space-y-2">
                     <label className="block text-sm font-semibold text-gray-700">
                       {field.label}
